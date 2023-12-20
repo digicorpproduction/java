@@ -1,0 +1,87 @@
+const { execSync } = require("child_process");
+
+const fs = require("fs");
+
+const os = require("os");
+
+const path = require("path");
+
+// Get latest Java version from Oracle's site
+
+let latestVersion;
+
+try {
+
+  latestVersion = execSync("curl https://www.oracle.com/java/technologies/javase-downloads.html | grep -m 1 -o 'Version .* is the latest version' | awk '{print $2}'").toString().trim();
+
+} catch (e) {
+
+  console.error("Failed to get latest Java version", e);
+
+  process.exit(1);  
+
+}
+
+// Search for Java home paths
+
+const javaHomes = [];
+
+if (os.platform() === "win32") {
+
+  javaHomes.push(process.env["JAVA_HOME"]);
+
+  javaHomes.push(...execSync("where java.exe").toString().match(/java\.exe$/gm).map(p => path.dirname(path.dirname(p))));
+
+} else {
+
+  javaHomes.push(process.env["JAVA_HOME"]);
+
+  javaHomes.push(...execSync("which java").toString().match(/bin\/java$/gm).map(p => path.dirname(path.dirname(p))));   
+
+}
+
+// Remove duplicates
+
+javaHomes = [...new Set(javaHomes)];
+
+// Check each install
+
+javaHomes.forEach(javaHome => {
+
+  let version = "";
+
+  try {
+
+    version = execSync(`${javaHome}/bin/java -version 2>&1`).toString().split("\n")[0].match(/version "([^"]+)"/)[1];
+
+  } catch (e) {
+
+    console.warn(`Failed to get version of Java at ${javaHome}`);
+
+    return;
+
+  }
+
+  if (version === latestVersion) {
+
+    console.log(`Java at ${javaHome} is latest version ${latestVersion}`);
+
+  } else {
+
+    console.log(`Updating Java ${version} at ${javaHome} to ${latestVersion}`);
+
+    try {
+
+      execSync(`curl -L -b "oraclelicense=a" "https://download.oracle.com/otn-pub/java/jdk/${latestVersion}/jdk-${latestVersion}_linux-x64_bin.tar.gz" | tar xz -C ${javaHome} --strip-components=1`);
+
+      console.log(`Updated Java at ${javaHome} to ${latestVersion}`);
+
+    } catch(e) {
+
+      console.error(`Failed to update Java at ${javaHome}`);
+
+    }
+
+  }
+
+});
